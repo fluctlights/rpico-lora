@@ -1,1 +1,1 @@
-# rpico-lora
+# rpico-lora : LoRa communication using Raspberry Pi Pico 2
