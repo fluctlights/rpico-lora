@@ -103,10 +103,5 @@ def loop():
 
     time.sleep(1)
 
-# Run setup and loop
-setup()
-while True:
-    loop()
-
 
     

@@ -21,6 +21,9 @@ def loadAirquality():
 
     # Inicio y recogida de datos del sensor de calidad del aire (PM2.5)
     airquality = DFRobot_AirQualitySensor(i2c, I2C_ADDRESS)
+
+    version = sensor.gain_version()
+    print("Firmware version is: " + str(version))
     num_particles_bigger_than_2_5_um_per_0_1_l = airquality.gain_particlenum_every0_1l(airquality.PARTICLENUM_2_5_UM_EVERY0_1L_AIR)
     concentration_pm2_5_in_ug_m3 = airquality.gain_particle_concentration_ugm3(airquality.PARTICLE_PM2_5_STANDARD)
     return airquality, num_particles_bigger_than_2_5_um_per_0_1_l, concentration_pm2_5_in_ug_m3
@@ -50,19 +53,15 @@ def loadLora():
     lora.setBlockingCallback(False, tx_callback)
     return lora
 
-def main():
-    # Inicio de los componentes
-    airsensor, val1, val2 = loadAirquality()
-    lora = loadLora()
 
-    global start
-    start = utime.time() # Tiempo de inicio (global)
+print("AAAAAAAA")
+# Inicio de los componentes
+# airsensor, val1, val2 = loadAirquality() 
+# lora = loadLora()
 
-    # TODO :: IMPLEMENTAR TX/RX
-    lora.send(str((val1, val2)))
-    print("Message sent successfully")
+global start
+start = utime.time() # Tiempo de inicio (global)
 
-
-
-if __name__ == "__main__":
-    main()
+# TODO :: IMPLEMENTAR TX/RX
+#lora.send(str((val1, val2)))
+print("Message sent successfully")
