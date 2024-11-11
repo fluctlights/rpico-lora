@@ -37,13 +37,14 @@ if implementation.name == 'circuitpython':
 
 class SX126X:
 
-    def __init__(self, spi_bus, clk, mosi, miso, cs, irq, rst, gpio):
+    def __init__(self, cs, irq, rst, gpio, clk, mosi, miso):
         self._irq = irq
         if implementation.name == 'micropython':
-          try:
-              self.spi = SPI(spi_bus, mode=SPI.MASTER, baudrate=2000000, pins=(clk, mosi, miso))        # Pycom variant uPy
-          except:
-              self.spi = SPI(spi_bus, baudrate=2000000, sck=Pin(clk), mosi=Pin(mosi), miso=Pin(miso))   # Generic variant uPy
+          #try:
+          # self.spi = SPI(0, mode=SPI.MASTER, baudrate=2000000, pins=(clk, mosi, miso))  # Pycom variant uPy
+          self.spi = SPI(0, baudrate=1000000, polarity=0, phase=0, bits=8, firstbit=SPI.MSB)  # RP2 variant uPy - Hardware SPI
+          #except:
+          # self.spi = SPI(0, baudrate=2000000, pins=(clk, mosi, miso))                   # Generic variant uPy
           self.cs = Pin(cs, mode=Pin.OUT)
           self.irq = Pin(irq, mode=Pin.IN)
           self.rst = Pin(rst, mode=Pin.OUT)
@@ -53,7 +54,7 @@ class SX126X:
           self.spi = busio.SPI(clk, MOSI=mosi, MISO=miso)
           while not self.spi.try_lock():
               pass
-          self.spi.configure(baudrate=2000000, phase=0, polarity=0, bits=8)
+          self.spi.configure(baudrate=10000, phase=0, polarity=0, bits=8)
           self.spi.unlock()
           self.cs = digitalio.DigitalInOut(cs)
           self.cs.switch_to_output(value=True)
@@ -77,7 +78,6 @@ class SX126X:
         self._txIq = 0
         self._rxIq = 0
         self._invertIQ = 0
-        self._ldroAuto = True
 
         self._br = 0
         self._freqDev = 0
@@ -111,45 +111,62 @@ class SX126X:
         self._rxIq = rxIq
         self._invertIQ = SX126X_LORA_IQ_STANDARD
 
+#        print("\nbegin\n-----")
+
+#        print("Reset module")
         state = self.reset()
         ASSERT(state)
 
+#        print("Standby")
         state = self.standby()
         ASSERT(state)
-        
+
+#        print("Config as Lora")
+        state = self.config(SX126X_PACKET_TYPE_LORA)
+        ASSERT(state)
+
+#        print(self.getPacketType(), "should be ", SX126X_PACKET_TYPE_LORA)
+#        print("GFSK packet code is: ", SX126X_PACKET_TYPE_GFSK)
+
+#        print("Set TCXO")
         if tcxoVoltage > 0.0:
             state = self.setTCXO(tcxoVoltage)
             ASSERT(state)
 
-        state = self.config(SX126X_PACKET_TYPE_LORA)
+#        print("Set SF")
+        state = self.setSpreadingFactor(sf)
         ASSERT(state)
-        
+
+#        print("Set BW")
+        state = self.setBandwidth(bw)
+        ASSERT(state)
+
+#        print("Set CR")
+        state = self.setCodingRate(cr)
+        ASSERT(state)
+
+#        print("Set syncWord")
+        state = self.setSyncWord(syncWord)
+        ASSERT(state)
+
+#        print("Set currentLimit")
+        state = self.setCurrentLimit(currentLimit)
+        ASSERT(state)
+
+#        print("Set Preamble length")
+        state = self.setPreambleLength(preambleLength)
+        ASSERT(state)
+
+#        print("\nSet Dio2 As RF Switch")
+#        state = self.setDio2AsRfSwitch(True)
+#        ASSERT(state)
+
         if useRegulatorLDO:
             state = self.setRegulatorLDO()
         else:
             state = self.setRegulatorDCDC()
-        ASSERT(state)
 
-        state = self.setSpreadingFactor(sf)
-        ASSERT(state)
-
-        state = self.setBandwidth(bw)
-        ASSERT(state)
-
-        state = self.setCodingRate(cr)
-        ASSERT(state)
-
-        state = self.setSyncWord(syncWord)
-        ASSERT(state)
-
-        state = self.setCurrentLimit(currentLimit)
-        ASSERT(state)
-
-        state = self.setPreambleLength(preambleLength)
-        ASSERT(state)
-
-        state = self.setDio2AsRfSwitch(True)
-        ASSERT(state)
+#        print("\nbegin finished\n--------------\n")
 
         return state
 
@@ -169,19 +186,13 @@ class SX126X:
 
         state = self.standby()
         ASSERT(state)
-        
-        if tcxoVoltage > 0.0:
-            state = self.setTCXO(tcxoVoltage)
-            ASSERT(state)
 
         state = self.config(SX126X_PACKET_TYPE_GFSK)
         ASSERT(state)
-        
-        if useRegulatorLDO:
-            state = self.setRegulatorLDO()
-        else:
-            state = self.setRegulatorDCDC()
-        ASSERT(state)
+
+        if tcxoVoltage > 0.0:
+            state = self.setTCXO(tcxoVoltage)
+            ASSERT(state)
 
         state = self.setBitRate(br)
         ASSERT(state)
@@ -213,6 +224,11 @@ class SX126X:
 
         state = self.setDio2AsRfSwitch(True)
         ASSERT(state)
+
+        if useRegulatorLDO:
+            state = self.setRegulatorLDO()
+        else:
+            state = self.setRegulatorDCDC()
 
         return state
 
@@ -269,7 +285,6 @@ class SX126X:
 
         start = ticks_us()
         while not self.irq.value():
-            yield_()
             if abs(ticks_diff(start, ticks_us())) > timeout:
                 self.clearIrqStatus()
                 self.standby()
@@ -386,8 +401,9 @@ class SX126X:
         return state
 
     def standby(self, mode=SX126X_STANDBY_RC):
-        data = [mode]
-        return self.SPIwriteCommand([SX126X_CMD_SET_STANDBY], 1, data, 1)
+        data = bytearray(1)
+        data[0] = mode
+        return self.SPIwriteCommand(bytearray([SX126X_CMD_SET_STANDBY]), 1, data, 1)
 
     def setDio1Action(self, func):
         try:
@@ -531,14 +547,10 @@ class SX126X:
         ASSERT(state)
         
         state = self.clearIrqStatus()
-
-        modem = self.getPacketType()
-        if modem == SX126X_PACKET_TYPE_LORA:
+        
+        if self._headerType == SX126X_LORA_HEADER_IMPLICIT and self.getPacketType() == SX126X_PACKET_TYPE_LORA:
             state = self.setPacketParams(self._preambleLength, self._crcType, self._implicitLen, self._headerType, self._invertIQ)
-        elif modem == SX126X_PACKET_TYPE_GFSK:
-            state = self.setPacketParamsFSK(self._preambleLengthFSK, self._crcTypeFSK, self._syncWordLength, self._addrComp, self._whitening, self._packetType)
-        else:
-            return ERR_UNKNOWN
+            ASSERT(state)
                 
         return state
             
@@ -549,6 +561,7 @@ class SX126X:
         irq = self.getIrqStatus()
         crcState = ERR_NONE
         if irq & SX126X_IRQ_CRC_ERR or irq & SX126X_IRQ_HEADER_ERR:
+            self.clearIrqStatus()
             crcState = ERR_CRC_MISMATCH
                 
         length = len_
@@ -588,7 +601,7 @@ class SX126X:
             return ERR_INVALID_BANDWIDTH
 
         self._bwKhz = bw
-        return self.setModulationParams(self._sf, self._bw, self._cr, self._ldro)
+        return self.setModulationParams(self._sf, self._bw, self._cr)
 
     def setSpreadingFactor(self, sf):
         if self.getPacketType() != SX126X_PACKET_TYPE_LORA:
@@ -598,7 +611,7 @@ class SX126X:
             return ERR_INVALID_SPREADING_FACTOR
 
         self._sf = sf
-        return self.setModulationParams(self._sf, self._bw, self._cr, self._ldro)
+        return self.setModulationParams(self._sf, self._bw, self._cr)
 
     def setCodingRate(self, cr):
         if self.getPacketType() != SX126X_PACKET_TYPE_LORA:
@@ -608,7 +621,7 @@ class SX126X:
             return ERR_INVALID_CODING_RATE
 
         self._cr = cr - 4
-        return self.setModulationParams(self._sf, self._bw, self._cr, self._ldro)
+        return self.setModulationParams(self._sf, self._bw, self._cr)
 
     def setSyncWord(self, syncWord, *args):
         if self.getPacketType() == SX126X_PACKET_TYPE_LORA:
@@ -950,29 +963,11 @@ class SX126X:
     def setEncoding(self, encoding):
         return self.setWhitening(encoding)
 
-    def forceLDRO(self, enable):
-        if self.getPacketType() != SX126X_PACKET_TYPE_LORA:
-            return ERR_WRONG_MODEM
-
-        self._ldroAuto = False
-        self._ldro = enable
-        return self.setModulationParams(self._sf, self._bw, self._cr, self._ldro)
-
-    def autoLDRO(self):
-        if self.getPacketType() != SX126X_PACKET_TYPE_LORA:
-            return ERR_WRONG_MODEM
-
-        self._ldroAuto = True
-        return self.setModulationParams(self._sf, self._bw, self._cr, self._ldro)
-
     def setTCXO(self, voltage, delay=5000):
         self.standby()
 
         if self.getDeviceErrors() & SX126X_XOSC_START_ERR:
             self.clearDeviceErrors()
-
-        if abs(voltage - 0.0) <= 0.001:
-            return self.reset()
 
         data = [0,0,0,0]
         if abs(voltage - 1.6) <= 0.001:
@@ -1078,11 +1073,13 @@ class SX126X:
         data = bytearray([0xFF])
         data_mv = memoryview(data)
         self.SPIreadCommand([SX126X_CMD_GET_PACKET_TYPE], 1, data_mv, 1)
+#        if (data[0] == SX126X_PACKET_TYPE_GFSK):
+#            print("Current packet type: GFSK")
+#        if (data[0] == SX126X_PACKET_TYPE_LORA):
+#            print("Current packet type: LORA")
         return data[0]
 
     def setTxParams(self, power, rampTime=SX126X_PA_RAMP_200U):
-        if power < 0:
-            power += 256
         data = [power, rampTime]
         return self.SPIwriteCommand([SX126X_CMD_SET_TX_PARAMS], 1, data, 2)
 
@@ -1109,8 +1106,8 @@ class SX126X:
 
         return state
 
-    def setModulationParams(self, sf, bw, cr, ldro):
-        if self._ldroAuto:
+    def setModulationParams(self, sf, bw, cr, ldro=0xFF):
+        if ldro == 0xFF:
             symbolLength = float((1 << self._sf)) / float(self._bwKhz)
             if symbolLength >= 16.0:
                 self._ldro = SX126X_LORA_LOW_DATA_RATE_OPTIMIZE_ON
@@ -1142,8 +1139,8 @@ class SX126X:
         return self.SPIwriteCommand([SX126X_CMD_SET_PACKET_PARAMS], 1, data, 9)
 
     def setBufferBaseAddress(self, txBaseAddress=0x00, rxBaseAddress=0x00):
-        data = [txBaseAddress, rxBaseAddress]
-        return self.SPIwriteCommand([SX126X_CMD_SET_BUFFER_BASE_ADDRESS], 1, data, 2)
+        data = bytearray([txBaseAddress, rxBaseAddress])
+        return self.SPIwriteCommand(bytearray([SX126X_CMD_SET_BUFFER_BASE_ADDRESS]), 1, data, 2)
 
     def setRegulatorMode(self, mode):
         data = [mode]
@@ -1276,18 +1273,32 @@ class SX126X:
         return self.SPItransfer(cmd, cmdLen, False, [], data, numBytes, waitForBusy)
 
     def SPItransfer(self, cmd, cmdLen, write, dataOut, dataIn, numBytes, waitForBusy, timeout=5000):
+#        if write:
+#            print("\t\t\tWriting: ", end='')
+#        else:
+#            print("\t\t\tReading: ", end='')
+#        for i in range(cmdLen):
+#            print(hex(cmd[i]), " ", end='')
+#        if write:
+#            for i in range(numBytes):
+#                print(hex(dataOut[i]), " ", end='')
+#        else:
+#            for i in range(numBytes + 1):
+#                print(hex(SX126X_CMD_NOP), " ", end='')
+            
+#        print("\n\t\t\tResponse: ", end='')
+
         if implementation.name == 'micropython':
           self.cs.value(0)
 
           start = ticks_ms()
           while self.gpio.value():
-              yield_()
               if abs(ticks_diff(start, ticks_ms())) >= timeout:
-                  self.cs.value(1)
                   return ERR_SPI_CMD_TIMEOUT
 
           for i in range(cmdLen):
-              self.spi.write(bytes([cmd[i]]))
+              self.spi.read(1, cmd[i])
+#              print(hex(self.spi.read(1, cmd[i])[0]), " ", end='')
 
         if implementation.name == 'circuitpython':
           while not self.spi.try_lock():
@@ -1296,14 +1307,13 @@ class SX126X:
 
           start = ticks_ms()
           while self.gpio.value:
-              yield_()
               if abs(ticks_diff(start, ticks_ms())) >= timeout:
                   self.cs.value = True
                   self.spi.unlock()
                   return ERR_SPI_CMD_TIMEOUT
 
           for i in range(cmdLen):
-              self.spi.write(bytes([cmd[i]]))
+              self.spi.write(hex([cmd[i]]))
 
           in_ = bytearray(1)
 
@@ -1312,13 +1322,12 @@ class SX126X:
         if write:
             for i in range(numBytes):
                 if implementation.name == 'micropython':
-                    try:
-                        in_ = self.spi.read(1, dataOut[i])
-                    except:
-                        in_ = self.spi.read(1, write=dataOut[i])
+#                    print("data write: ", dataOut[i])
+                    in_ = self.spi.read(1, dataOut[i])
+#                    print(hex(in_[0]), " ", end='')
 
                 if implementation.name == 'circuitpython':
-                  self.spi.write_readinto(bytes([dataOut[i]]), in_)
+                    self.spi.write_readinto(bytes([dataOut[i]]), in_)
 
                 if (in_[0] & 0b00001110) == SX126X_STATUS_CMD_TIMEOUT or\
                    (in_[0] & 0b00001110) == SX126X_STATUS_CMD_INVALID or\
@@ -1330,13 +1339,11 @@ class SX126X:
                     break
         else:
             if implementation.name == 'micropython':
-                try:
-                    in_ = self.spi.read(1, SX126X_CMD_NOP)
-                except:
-                    in_ = self.spi.read(1, write=SX126X_CMD_NOP)
+                in_ = self.spi.read(1, SX126X_CMD_NOP)
+#                print(hex(in_[0]), " ", end='')
 
             if implementation.name == 'circuitpython':
-              self.spi.readinto(in_)
+                self.spi.readinto(in_)
 
             if (in_[0] & 0b00001110) == SX126X_STATUS_CMD_TIMEOUT or\
                (in_[0] & 0b00001110) == SX126X_STATUS_CMD_INVALID or\
@@ -1347,39 +1354,43 @@ class SX126X:
             else:
                 if implementation.name == 'micropython':
                     for i in range(numBytes):
-                        try:
-                            dataIn[i] = self.spi.read(1, SX126X_CMD_NOP)[0]
-                        except:
-                            dataIn[i] = self.spi.read(1, write=SX126X_CMD_NOP)[0]
+                        dataIn[i] = self.spi.read(1, SX126X_CMD_NOP)[0]
 
                 if implementation.name == 'circuitpython':
-                  for i in range(numBytes):
-                      self.spi.readinto(in_)
-                      dataIn[i] = in_[0]
+                    for i in range(numBytes):
+                        self.spi.readinto(in_)
+                        dataIn[i] = in_[0]
 
         if implementation.name == 'micropython':
-          self.cs.value(1)
+            self.cs.value(1)
 
         if implementation.name == 'circuitpython':
-          self.cs.value = True
-          self.spi.unlock()
+            self.cs.value = True
+            self.spi.unlock()
+
+#        if write:
+#            print(" <")
+#        else:
+#            for i in range(numBytes):
+#                print(hex(dataIn[i]), " ", end='')
+#            print(" <")
 
         if waitForBusy:
             sleep_us(1)
+#            sleep_ms(1)
             start = ticks_ms()
             if implementation.name == 'micropython':
-              while self.gpio.value():
-                  yield_()
-                  if abs(ticks_diff(start, ticks_ms())) >= timeout:
-                      status =  SX126X_STATUS_CMD_TIMEOUT
-                      break
+                while self.gpio.value():
+                    if abs(ticks_diff(start, ticks_ms())) >= timeout:
+                        status =  SX126X_STATUS_CMD_TIMEOUT
+#                        print("waitForBusy timeouted")
+                        break
 
             if implementation.name == 'circuitpython':
-              while self.gpio.value:
-                  yield_()
-                  if abs(ticks_diff(start, ticks_ms())) >= timeout:
-                      status =  SX126X_STATUS_CMD_TIMEOUT
-                      break
+                while self.gpio.value:
+                    if abs(ticks_diff(start, ticks_ms())) >= timeout:
+                        status =  SX126X_STATUS_CMD_TIMEOUT
+                        break
 
         switch = {SX126X_STATUS_CMD_TIMEOUT: ERR_SPI_CMD_TIMEOUT,
                   SX126X_STATUS_CMD_INVALID: ERR_SPI_CMD_INVALID,
@@ -1389,3 +1400,4 @@ class SX126X:
             return switch[status]
         except:
             return ERR_NONE
+

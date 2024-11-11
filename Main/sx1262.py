@@ -16,40 +16,50 @@ class SX1262(SX126X):
     PREAMBLE_DETECT_32 = SX126X_GFSK_PREAMBLE_DETECT_32
     STATUS = ERROR
 
-    def __init__(self, spi_bus, clk, mosi, miso, cs, irq, rst, gpio):
-        super().__init__(spi_bus, clk, mosi, miso, cs, irq, rst, gpio)
+    def __init__(self, cs, irq, rst, gpio, clk, mosi, miso):
+        super().__init__(cs, irq, rst, gpio, clk, mosi, miso)
         self._callbackFunction = self._dummyFunction
 
-    def begin(self, freq=434.0, bw=125.0, sf=9, cr=7, syncWord=SX126X_SYNC_WORD_PRIVATE,
+    def begin(self, freq=868.3, bw=250.0, sf=7, cr=5, syncWord=SX126X_SYNC_WORD_PRIVATE,
               power=14, currentLimit=60.0, preambleLength=8, implicit=False, implicitLen=0xFF,
               crcOn=True, txIq=False, rxIq=False, tcxoVoltage=1.6, useRegulatorLDO=False,
               blocking=True):
         state = super().begin(bw, sf, cr, syncWord, currentLimit, preambleLength, tcxoVoltage, useRegulatorLDO, txIq, rxIq)
         ASSERT(state)
 
+#        print("\nSX1262 begin finished\n---------------------\n")
+
         if not implicit:
+#            print("Set explicit header")
             state = super().explicitHeader()
         else:
+#            print("Set implicit header")
             state = super().implicitHeader(implicitLen)
         ASSERT(state)
 
+#        print("Set CRC")
         state = super().setCRC(crcOn)
         ASSERT(state)
 
+#        print("Set frequency")
         state = self.setFrequency(freq)
         ASSERT(state)
 
+#        print("Set output power")
         state = self.setOutputPower(power)
         ASSERT(state)
 
+#        print("Fix PA Clamping")
         state = super().fixPaClamping()
         ASSERT(state)
 
         state = self.setBlockingCallback(blocking)
 
+#        print("\nSX1262 begin finished\n---------------------\n")
+
         return state
 
-    def beginFSK(self, freq=434.0, br=48.0, freqDev=50.0, rxBw=156.2, power=14, currentLimit=60.0,
+    def beginFSK(self, freq=868.0, br=48.0, freqDev=50.0, rxBw=156.2, power=14, currentLimit=60.0,
                  preambleLength=16, dataShaping=0.5, syncWord=[0x2D, 0x01], syncBitsLength=16,
                  addrFilter=SX126X_GFSK_ADDRESS_FILT_OFF, addr=0x00, crcLength=2, crcInitial=0x1D0F, crcPolynomial=0x1021,
                  crcInverted=True, whiteningOn=True, whiteningInitial=0x0100,

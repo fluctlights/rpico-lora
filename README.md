@@ -8,6 +8,7 @@ Referencia: https://www.tomshardware.com/raspberry-pi/raspberry-pi-pico/how-to-i
 ## Librerías externas utilizadas
 
 - Chip LoRa (SX1262): https://github.com/ehong-tl/micropySX126X/tree/master
+- Chip LoRa (SX1262): https://github.com/GereZoltan/LoRaWAN/tree/main
 - Sensor PM2.5: https://github.com/DFRobot/DFRobot_AirQualitySensor/tree/master
 - Deepsleep Pi Pico 2: https://ghubcoder.github.io/posts/deep-sleeping-the-pico-micropython/
 

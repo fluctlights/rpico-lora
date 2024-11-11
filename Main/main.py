@@ -1,14 +1,42 @@
-# -*- coding: utf-8 -*
 
 from sx1262 import SX1262
 from dfrobot_airqualitysensor import *
 import utime
+import struct
+from machine import I2C, Pin, SPI
+
+PRESET = 0xFFFF
+POLYNOMIAL = 0xA001 # Modbus
 
 # Funcion callback para los envíos del módulo LoRa
 def tx_callback(events):
     if events & SX1262.TX_DONE:
         print('Done')
         print(utime.time()-start)
+
+# Funcion para el CRC
+def crc16(data):
+    crc = PRESET
+    for byte in data:
+        crc = crc ^ byte
+        for _ in range(8):
+            if (crc & 1) == 0:
+                crc = (crc >> 1) ^ POLYNOMIAL
+            else:
+                crc >>= 1
+                
+    return crc ^ PRESET
+
+# Funcion para codificacion de bytes/hex en CBOR
+def cbor_encode_hex(data):
+    length = len(data)
+    return bytes([0x40 + length]) + data  # bytes major type (0x40) + data
+
+# Funcion para codificacion de float32 en CBOR
+def encode_float_single(value):
+    cbor_type = b'\xFA'  # Single-precision
+    float_bytes = struct.pack('>f', value)  # Big-endian
+    return cbor_type + float_bytes
 
 ###########################
 # SENSOR CALIDAD DEL AIRE #
@@ -33,35 +61,42 @@ def loadAirquality():
 ###############
 
 def loadLora():
-    # Iniciar módulo LoRa
-    lora = SX1262(spi_bus=1, clk=10, 
-                mosi=11, miso=12, 
-                cs=3, irq=20, 
-                rst=15, gpio=2
-                )
+
+    #spi = SPI(0, baudrate=1000000, polarity=0, phase=0, sck=Pin(18), mosi=Pin(19), miso=Pin(16))
     
-    # Parametros validos en Europa
-    lora.begin(freq=868, bw=125.0, sf=10, cr=8, syncWord=0x12,
-            power=14, currentLimit=60.0, preambleLength=8,
-            implicit=False, implicitLen=0xFF,
-            crcOn=False, txIq=False, rxIq=False,
-            tcxoVoltage=1.7, useRegulatorLDO=False, 
-            blocking=True 
-            )
+    # Iniciar módulo LoRa
+    sx = SX1262(clk=Pin(18), 
+                mosi=Pin(19), miso=Pin(16), 
+                cs=Pin(8), rst=Pin(9), irq=Pin(7),
+                gpio=Pin(15)
+                )
+
+    sx.begin(freq=868.3, bw=125, sf=10, cr=6, syncWord=0x12,
+         power=-5, currentLimit=60.0, preambleLength=8,
+         implicit=False, implicitLen=0xFF,
+         crcOn=True, txIq=False, rxIq=False,
+         tcxoVoltage=1.7, useRegulatorLDO=False, blocking=True)
+
 
     # Envio no bloqueante y asociación con funcion callback
-    lora.setBlockingCallback(False, tx_callback)
-    return lora
+    sx.setBlockingCallback(False, tx_callback)
+    
+    return sx
 
 
 print("AAAAAAAA")
 # Inicio de los componentes
 # airsensor, val1, val2 = loadAirquality() 
-# lora = loadLora()
+lora = loadLora()
 
 global start
 start = utime.time() # Tiempo de inicio (global)
+data = (11.111,11.222,11.333,11.444,11.555,11.666,11.777, start)
+#checksum = crc16(data)
 
 # TODO :: IMPLEMENTAR TX/RX
-#lora.send(str((val1, val2)))
+
+print(lora.getStatus())
+lora.send(b'aaaa')
+print(lora.getStatus())
 print("Message sent successfully")
