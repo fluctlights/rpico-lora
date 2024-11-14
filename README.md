@@ -17,7 +17,7 @@ Se ha utilizado VSCode para este desarrollo, instalando las extensiones MicroPic
 
 ## Documentación
 
-- Modulo LoRa: https://www.spec-sensors.com/wp-content/uploads/2024/06/DGS2-970-Series-Datasheet-24a.pdf
-- Modulos de Gases: https://www.waveshare.com/wiki/Core1262-868M
+- Modulo LoRa: https://www.waveshare.com/wiki/Core1262-868M
+- Modulos de Gas NO2:  https://www.spec-sensors.com/wp-content/uploads/2024/06/DGS2-970-Series-Datasheet-24a.pdf
 - Calculadora LoRa: https://www.loratools.nl/#/airtime
 
