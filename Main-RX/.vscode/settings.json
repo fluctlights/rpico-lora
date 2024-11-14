@@ -1,3 +1,4 @@
+
 {
     "python.languageServer": "Pylance",
     "python.analysis.typeCheckingMode": "basic",
@@ -12,5 +13,7 @@
     ],
     "python.analysis.extraPaths": [
         "~/.micropico-stubs/included"
-    ]
+    ],
+    "micropico.manualComDevice": "/dev/ttyACM1",
+    "micropico.autoConnect": false
 }

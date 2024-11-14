@@ -3,7 +3,7 @@ from sx1262 import SX1262
 from dfrobot_airqualitysensor import *
 import utime
 import struct
-from machine import I2C, Pin, SPI
+from machine import I2C, Pin, UART
 
 PRESET = 0xFFFF
 POLYNOMIAL = 0xA001 # Modbus
@@ -18,7 +18,7 @@ def tx_callback(events):
 def crc16(data):
     crc = PRESET
     for byte in data:
-        crc = crc ^ byte
+        crc = crc ^ int(byte)
         for _ in range(8):
             if (crc & 1) == 0:
                 crc = (crc >> 1) ^ POLYNOMIAL
@@ -83,20 +83,72 @@ def loadLora():
     
     return sx
 
+############################
+# SENSOR DIOXIDO NITROGENO #
+############################
 
-print("AAAAAAAA")
-# Inicio de los componentes
-# airsensor, val1, val2 = loadAirquality() 
-lora = loadLora()
+def loadNitrogenDioxide():
 
+    # Inicio UART 0
+    no2_sensor = UART(0, baudrate=9600, tx=Pin(0), rx=Pin(1), bits=8, parity=None, stop=1)
+
+    # Activando sensor
+    no2_sensor.write("r")
+    utime.sleep_ms(1500)
+
+    # Activar modo una sola lectura para leer datos
+    no2_sensor.write("\r")
+
+    # Espera activa
+    while not no2_sensor.any():
+        continue
+
+    # Leer dato
+    received_data = no2_sensor.read()
+    
+    # Deepsleep (para reactivar hay que mandar cualquier caracter)
+    no2_sensor.write("s")
+
+    # Procesar datos y return
+    received_data = received_data.decode('utf-8')
+    received_data = received_data.split(',', 1)[1] # elimino primer elemento
+    clean_data = [e.strip() for e in received_data.split(',')]
+    vals = [int(e) for e in clean_data]
+
+    # Temp (pos. 2) y Humedad (pos. 3) SON PORCENTAJES! LOS METO COMO INT PARA AHORRAR ESPACIO!
+    gas_values = (vals[1], vals[2])
+    # NO2 resultado (pos. ) (conversion del ADC) --> Float
+    gas_max_adc = 65535
+    gas_value = (vals[3]/gas_max_adc)*100
+
+    # Concatenando
+    values = gas_values + (gas_value,)
+
+    return values
+
+print("\n--------------")
+print("Modulo TX LoRa")
+print("--------------\n")
+
+# Inicio de los sensores (faltan todavia)
+# airsensor, val1, val2 = loadAirquality()
+data_airsensor = (11.111, 11.222)
+data_no2 = loadNitrogenDioxide()
+
+# Tiempo de inicio (global)
 global start
-start = utime.time() # Tiempo de inicio (global)
-data = (11.111,11.222,11.333,11.444,11.555,11.666,11.777, start)
-#checksum = crc16(data)
+start = utime.time() 
 
-# TODO :: IMPLEMENTAR TX/RX
+# Concatenacion de las tuplas de valores
+data = data_airsensor + data_no2
+payload_data = data + (start,)
+checksum = crc16(payload_data)
 
+# Inicio modulo lora (TX)
+lora = loadLora()
 print(lora.getStatus())
 lora.send(b'aaaa')
 print(lora.getStatus())
+print(lora.getDeviceErrors()) #0 es que no hay errores
 print("Message sent successfully")
+print(payload_data)
