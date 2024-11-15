@@ -1,4 +1,3 @@
-
 from sx1262 import SX1262
 from dfrobot_airqualitysensor import *
 import utime
@@ -109,12 +108,15 @@ def loadNitrogenDioxide():
     # Activando sensor
     no2_sensor.write("r")
     utime.sleep_ms(1500)
+    no2_sensor.write("Z")
+    utime.sleep_ms(1500)
 
     # Activar modo una sola lectura para leer datos
     no2_sensor.write("\r")
+    utime.sleep_ms(200)
 
     # Espera activa
-    while not no2_sensor.any():
+    while no2_sensor.any() == None:
         continue
 
     # Leer dato
@@ -122,6 +124,7 @@ def loadNitrogenDioxide():
     
     # Deepsleep (para reactivar hay que mandar cualquier caracter)
     no2_sensor.write("s")
+    utime.sleep_ms(100)
 
     # Procesar datos y return
     received_data = received_data.decode('utf-8')
