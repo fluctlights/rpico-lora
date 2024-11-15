@@ -10,8 +10,7 @@ POLYNOMIAL = 0xA001 # Modbus
 
 # Funcion callback para los envíos del módulo LoRa
 def tx_callback(events):
-    print("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG")
-    if SX1262.TX_DONE:
+    if events & SX1262.TX_DONE:
         print('Done')
         print(utime.time()-start)
 
@@ -34,10 +33,51 @@ def cbor_encode_hex(data):
     return bytes([0x40 + length]) + data  # bytes major type (0x40) + data
 
 # Funcion para codificacion de float32 en CBOR
-def encode_float_single(value):
+def cbor_encode_float_single(value):
     cbor_type = b'\xFA'  # Single-precision
     float_bytes = struct.pack('>f', value)  # Big-endian
     return cbor_type + float_bytes
+
+# Funcion para codificacion de int en CBOR
+def cbor_encode_integer(major_type, value):
+    if value < 24:
+        # Fits into 5 bits of the initial byte
+        return bytes([(major_type << 5) | value])
+    elif value < 256:
+        # Additional 8-bit integer follows
+        return bytes([(major_type << 5) | 24, value])
+    elif value < 65536:
+        # Additional 16-bit integer follows
+        return bytes([(major_type << 5) | 25]) + value.to_bytes(2, 'big')
+    elif value < 4294967296:
+        # Additional 32-bit integer follows
+        return bytes([(major_type << 5) | 26]) + value.to_bytes(4, 'big')
+    elif value < 18446744073709551616:
+        # Additional 64-bit integer follows
+        return bytes([(major_type << 5) | 27]) + value.to_bytes(8, 'big')
+    else:
+        raise ValueError("Value too large for CBOR encoding")
+
+# Creacion del payload en formato CBOR
+def processPayload(payload):
+    data = bytes()
+    fields = 0
+    sizes = []
+
+    for element in payload:
+        if(type(element) == int):
+            data += cbor_encode_integer(0, element)
+            sizes.append(len(cbor_encode_integer(0, element)))
+
+        else:
+            data += cbor_encode_float_single(element)
+            sizes.append(len(cbor_encode_float_single(element)))
+
+        fields+=1
+
+    print("fields:", fields)
+    print("bytesize", sizes)
+    return data
 
 ###########################
 # SENSOR CALIDAD DEL AIRE #
@@ -56,33 +96,6 @@ def loadAirquality():
     num_particles_bigger_than_2_5_um_per_0_1_l = airquality.gain_particlenum_every0_1l(airquality.PARTICLENUM_2_5_UM_EVERY0_1L_AIR)
     concentration_pm2_5_in_ug_m3 = airquality.gain_particle_concentration_ugm3(airquality.PARTICLE_PM2_5_STANDARD)
     return airquality, num_particles_bigger_than_2_5_um_per_0_1_l, concentration_pm2_5_in_ug_m3
-
-###############
-# MODULO LORA #
-###############
-
-def loadLora():
-
-    #spi = SPI(0, baudrate=1000000, polarity=0, phase=0, sck=Pin(18), mosi=Pin(19), miso=Pin(16))
-    
-    # Iniciar módulo LoRa
-    sx = SX1262(clk=Pin(18), 
-                mosi=Pin(19), miso=Pin(16), 
-                cs=Pin(8), rst=Pin(9), irq=Pin(7),
-                gpio=Pin(15)
-                )
-
-    sx.begin(freq=868.3, bw=125, sf=10, cr=6, syncWord=0x12,
-         power=-5, currentLimit=60.0, preambleLength=8,
-         implicit=False, implicitLen=0xFF,
-         crcOn=True, txIq=True, rxIq=True,
-         tcxoVoltage=1.7, useRegulatorLDO=False, blocking=False)
-
-
-    # Envio no bloqueante y asociación con funcion callback
-    sx.setBlockingCallback(False, tx_callback)
-    
-    return sx
 
 ############################
 # SENSOR DIOXIDO NITROGENO #
@@ -128,33 +141,72 @@ def loadNitrogenDioxide():
 
     return values
 
-print("\n--------------")
-print("Modulo TX LoRa")
-print("--------------\n")
 
-# Inicio de los sensores (faltan todavia)
-# airsensor, val1, val2 = loadAirquality()
-data_airsensor = (11.111, 11.222)
-data_no2 = loadNitrogenDioxide()
+###############
+# MODULO LORA #
+###############
 
-# Tiempo de inicio (global)
-global start
-start = utime.time() 
+def loadLora():
 
-# Concatenacion de las tuplas de valores
-data = data_airsensor + data_no2
-payload_data = data + (start,)
-checksum = crc16(payload_data)
+    #spi = SPI(0, baudrate=1000000, polarity=0, phase=0, sck=Pin(18), mosi=Pin(19), miso=Pin(16))
+    
+    # Iniciar módulo LoRa
+    sx = SX1262(clk=Pin(18), 
+                mosi=Pin(19), miso=Pin(16), 
+                cs=Pin(8), rst=Pin(9), irq=Pin(7),
+                gpio=Pin(15)
+                )
 
-# Inicio modulo lora (TX)
-lora = loadLora()
-print(lora.getStatus())
-lora.send(b'aaaa')
-print(lora.getStatus())
-print(lora.getDeviceErrors()) #0 es que no hay errores
-print("Message sent successfully")
-print(payload_data)
+    sx.begin(freq=868.3, bw=125, sf=10, cr=6, syncWord=0x12,
+         power=-5, currentLimit=60.0, preambleLength=8,
+         implicit=False, implicitLen=0xFF,
+         crcOn=False, txIq=True, rxIq=False,
+         tcxoVoltage=1.7, useRegulatorLDO=False, blocking=False)
 
-# Probando callback
-while 1:
-    continue
+
+    # Envio no bloqueante y asociación con funcion callback
+    sx.setBlockingCallback(False, tx_callback)
+    
+    return sx
+
+def main():
+
+    print("\n--------------")
+    print("Modulo TX LoRa")
+    print("--------------\n")
+    
+    global start
+
+    # Inicio modulo lora (TX)
+    lora = loadLora()
+    while (lora.getDeviceErrors() != 0): # 0 es que no hay errores
+        lora = loadLora()
+
+    #lora.sleep()
+
+    while 1:
+        # Inicio de los sensores (faltan todavia)
+        # airsensor, val1, val2 = loadAirquality()
+        data_airsensor = (11.111, 11.222)
+        data_no2 = loadNitrogenDioxide()
+
+        # Timestamp del mensaje (variable global)
+        start = utime.time() 
+
+        # Concatenacion y procesado de las tuplas de valores
+        data = data_airsensor + data_no2
+        payload_info = data + (start,)
+        checksum = crc16(payload_info)
+        payload_data = (checksum,) + payload_info
+        print(payload_data)
+        payload = processPayload(payload_data)
+        
+        # Envio
+        #lora.standby()
+        lora.send(payload) # duty cycle incorporado
+        #lora.sleep()
+        print("Message sent successfully")
+        print(payload)
+
+if __name__ == "__main__":
+    main()
