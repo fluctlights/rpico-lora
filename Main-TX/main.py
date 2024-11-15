@@ -10,7 +10,8 @@ POLYNOMIAL = 0xA001 # Modbus
 
 # Funcion callback para los envíos del módulo LoRa
 def tx_callback(events):
-    if events & SX1262.TX_DONE:
+    print("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG")
+    if SX1262.TX_DONE:
         print('Done')
         print(utime.time()-start)
 
@@ -74,8 +75,8 @@ def loadLora():
     sx.begin(freq=868.3, bw=125, sf=10, cr=6, syncWord=0x12,
          power=-5, currentLimit=60.0, preambleLength=8,
          implicit=False, implicitLen=0xFF,
-         crcOn=True, txIq=False, rxIq=False,
-         tcxoVoltage=1.7, useRegulatorLDO=False, blocking=True)
+         crcOn=True, txIq=True, rxIq=True,
+         tcxoVoltage=1.7, useRegulatorLDO=False, blocking=False)
 
 
     # Envio no bloqueante y asociación con funcion callback
@@ -113,7 +114,8 @@ def loadNitrogenDioxide():
     received_data = received_data.decode('utf-8')
     received_data = received_data.split(',', 1)[1] # elimino primer elemento
     clean_data = [e.strip() for e in received_data.split(',')]
-    vals = [int(e) for e in clean_data]
+    print(clean_data)
+    vals = [float(e) for e in clean_data]
 
     # Temp (pos. 2) y Humedad (pos. 3) SON PORCENTAJES! LOS METO COMO INT PARA AHORRAR ESPACIO!
     gas_values = (vals[1], vals[2])
@@ -152,3 +154,7 @@ print(lora.getStatus())
 print(lora.getDeviceErrors()) #0 es que no hay errores
 print("Message sent successfully")
 print(payload_data)
+
+# Probando callback
+while 1:
+    continue

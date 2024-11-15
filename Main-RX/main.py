@@ -9,10 +9,12 @@ PRESET = 0xFFFF
 POLYNOMIAL = 0xA001 # Modbus
 
 # Funcion callback para los envíos del módulo LoRa
-def tx_callback(events):
-    if events & SX1262.TX_DONE:
+def rx_callback():
+    print("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG")
+    if SX1262.RX_DONE:
         print('Done')
-        print(utime.time()-start)
+        print(utime.time())
+
 
 # Funcion para el CRC
 def crc16(data):
@@ -76,27 +78,26 @@ def loadLora():
     sx.begin(freq=868.3, bw=125, sf=10, cr=6, syncWord=0x12,
          power=-5, currentLimit=60.0, preambleLength=8,
          implicit=False, implicitLen=0xFF,
-         crcOn=True, txIq=False, rxIq=False,
+         crcOn=True, txIq=True, rxIq=True,
          tcxoVoltage=1.7, useRegulatorLDO=False, blocking=True)
 
 
     # Envio no bloqueante y asociación con funcion callback
-    #sx.setBlockingCallback(False, tx_callback)
+    #sx.setBlockingCallback(False, callback=rx_callback)
     
     return sx
 
 
-# Inicio de los componentes
-# airsensor, val1, val2 = loadAirquality() 
+print("\n--------------")
+print("Modulo RX LoRa")
+print("--------------\n")
+
 lora = loadLora()
 
-global start
-start = utime.time() # Tiempo de inicio (global)
-data = (11.111,11.222,11.333,11.444,11.555,11.666,11.777, start)
-checksum = crc16(data)
-
 print(lora.getStatus())
-lora.recv()
+lora.startReceiveDutyCycleAuto()
+data = lora.recv()
+print(data)
 print(lora.getStatus())
 print(lora.getDeviceErrors()) #0 es que no hay errores
 print("Message sent successfully")
