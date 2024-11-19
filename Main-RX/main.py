@@ -1,9 +1,8 @@
 
 from sx1262 import SX1262
 from dfrobot_airqualitysensor import *
-import utime
 import struct
-from machine import I2C, Pin, UART
+from machine import Pin
 
 PRESET = 0xFFFF
 POLYNOMIAL = 0xA001 # Modbus
@@ -13,28 +12,41 @@ def rx_callback(events):
     if events & SX1262.RX_DONE:
         
         data = lora.recv()
-        bytes_payload = splitIntoChunks(data[0], 5) # type: ignore
-        print(bytes_payload)
+        correct = processData(data)
+        if correct:
+            print("Message OK!")
+        else:
+            print("ERROR while processing message")
         
-        crc = cbor_decode_integer(bytes_payload[0])
-        data_airsensor1 = cbor_decode_float_single(bytes_payload[1])
-        data_airsensor2 = cbor_decode_float_single(bytes_payload[2])
-        data_no2_1 = cbor_decode_float_single(bytes_payload[3])
-        data_no2_2 = cbor_decode_float_single(bytes_payload[4])
-        data_no2_3 = cbor_decode_float_single(bytes_payload[5])
-        timestamp = cbor_decode_integer(bytes_payload[6])
+# Procesado de los datos dentro del payload codificado
+def processData(lora_msg):
 
-        payload = (crc, data_airsensor1, data_airsensor2, data_no2_1, data_no2_2, data_no2_3, timestamp)
-        print(payload)
+    bytes_payload = splitIntoChunks(lora_msg[0], 5)
+    crc = cbor_decode_integer(bytes_payload[0])
+    data_airsensor1 = cbor_decode_float_single(bytes_payload[1])
+    data_airsensor2 = cbor_decode_float_single(bytes_payload[2])
+    data_no2_1 = cbor_decode_float_single(bytes_payload[3])
+    data_no2_2 = cbor_decode_float_single(bytes_payload[4])
+    data_no2_3 = cbor_decode_float_single(bytes_payload[5])
+    data_so2_1 = cbor_decode_float_single(bytes_payload[6])
+    data_so2_2 = cbor_decode_float_single(bytes_payload[7])
+    data_so2_3 = cbor_decode_float_single(bytes_payload[8])
+    timestamp = cbor_decode_integer(bytes_payload[9])
 
-        #print(type(data)) # type: ignore
-        #print(data) # type: ignore
-        #print("Message received successfully")
+    # Construir payload decodificado para el CRC
+    payload = (data_airsensor1, data_airsensor2,
+        data_no2_1, data_no2_2, data_no2_3, 
+        data_so2_1,data_so2_2, data_so2_3,
+        timestamp)
 
-        
+    # Comparativa del CRC
+    generated_crc = crc16(payload)
+    if generated_crc == crc:
+        return True
+    else:
+        return False
 
-
-# Funcion para el CRC
+# Funcion para generar el CRC
 def crc16(data):
     crc = PRESET
     for byte in data:
@@ -50,37 +62,31 @@ def crc16(data):
 def splitIntoChunks(byte_sequence, chunk_size):
     return [byte_sequence[i:i + chunk_size] for i in range(0, len(byte_sequence), chunk_size)]
 
-# Function to decode CBOR bytes/hex
+# Decodificar CBOR bytes/hex
 def cbor_decode_hex(data):
-    """
-    Decodes CBOR data that represents a byte string.
-    Expects the input to start with a major type 2 (0x40).
-    """
+    
     initial_byte = data[0]
     if initial_byte < 0x40 or initial_byte > 0x57:
         raise ValueError("Invalid CBOR encoding for byte string")
     length = initial_byte - 0x40  # Length is stored in the low 5 bits
-    return data[1:1 + length], data[1 + length:]  # Decoded byte string and remaining bytes
+    
+    
+    return data[1:1 + length]  # Decoded byte string
 
 
-# Function to decode CBOR float32
+# Decodificar CBOR float32
 def cbor_decode_float_single(data):
-    """
-    Decodes CBOR single-precision (float32) data.
-    Expects the input to start with 0xFA.
-    """
+
     if data[0] != 0xFA:
         raise ValueError("Invalid CBOR encoding for float32")
     float_bytes = data[1:5]  # Next 4 bytes are the float data
     value = struct.unpack('>f', float_bytes)[0]  # Big-endian
-    return value, data[5:]  # Decoded float and remaining bytes
+    return value  # Decoded float
 
 
-# Function to decode CBOR integers
+# Decodificar CBOR integer
 def cbor_decode_integer(data):
-    """
-    Decodes CBOR integer data (both major type 0 for positive and type 1 for negative).
-    """
+
     initial_byte = int(data[0])  # Convert first byte to an integer
     major_type = (initial_byte >> 5) & 0x07  # Extract the major type
     additional_info = initial_byte & 0x1F  # Extract the additional information
@@ -115,8 +121,7 @@ def cbor_decode_integer(data):
         # Negative integer
         value = -1 - value
 
-    return value, data[consumed_bytes:]  # Decoded integer and remaining bytes
-
+    return value  # Decoded integer
 
 
 ###############
@@ -125,9 +130,7 @@ def cbor_decode_integer(data):
 
 def loadLora():
 
-    #spi = SPI(0, baudrate=1000000, polarity=0, phase=0, sck=Pin(18), mosi=Pin(19), miso=Pin(16))
-    
-    # Iniciar módulo LoRa
+    # Iniciar módulo LoRa (SPI)
     sx = SX1262(clk=Pin(18), 
                 mosi=Pin(19), miso=Pin(16), 
                 cs=Pin(8), rst=Pin(9), irq=Pin(7),
@@ -152,8 +155,6 @@ print("Modulo RX LoRa")
 print("--------------\n")
 
 lora = loadLora()
-
-print(lora.getStatus())
 lora.startReceiveDutyCycleAuto() #seteando DC de recepcion
 data = lora.recv()
 

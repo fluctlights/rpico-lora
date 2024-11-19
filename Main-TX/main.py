@@ -1,3 +1,4 @@
+
 from sx1262 import SX1262
 from dfrobot_airqualitysensor import *
 import utime
@@ -10,8 +11,8 @@ POLYNOMIAL = 0xA001 # Modbus
 # Funcion callback para los envíos del módulo LoRa
 def tx_callback(events):
     if events & SX1262.TX_DONE:
-        print('Done')
-        print(utime.time()-start)
+        print('Message sent!')
+        lora.sleep()
 
 # Funcion para el CRC
 def crc16(data):
@@ -74,8 +75,8 @@ def processPayload(payload):
 
         fields+=1
 
-    print("fields:", fields)
-    print("bytesize", sizes)
+        print("Fields %d", fields)
+        print(sizes)
     return data
 
 ###########################
@@ -130,8 +131,10 @@ def loadNitrogenDioxide():
     received_data = received_data.decode('utf-8')
     received_data = received_data.split(',', 1)[1] # elimino primer elemento
     clean_data = [e.strip() for e in received_data.split(',')]
-    print(clean_data)
+
     vals = [float(e) for e in clean_data]
+    if vals[0] < 0:
+        vals[0] = 0.00
 
     # Temp (pos. 2) y Humedad (pos. 3) SON PORCENTAJES! LOS METO COMO INT PARA AHORRAR ESPACIO!
     gas_values = (vals[1], vals[2])
@@ -144,16 +147,81 @@ def loadNitrogenDioxide():
 
     return values
 
+######################################
+# EXTRAER NUMEROS LECTURA SENSOR SO2 #
+######################################
+
+def extractNumbers(data):
+
+    numbers = []
+    current_number = ''
+    for char in data:
+        if char.isdigit():
+            current_number += char 
+        elif current_number:
+            numbers.append(current_number) 
+            current_number = ''  
+    if current_number: 
+        numbers.append(current_number)
+    return numbers
+
+#########################
+# SENSOR DIOXIDO AZUFRE #
+#########################
+
+def loadAzufreDioxide():
+
+    # Inicio UART 1
+    so2_sensor = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5), bits=8, parity=None, stop=1)
+
+    # Activando sensor
+    so2_sensor.write("r")
+    utime.sleep_ms(1500)
+    so2_sensor.write("Z")
+    utime.sleep_ms(1500)
+
+    # Activar modo una sola lectura para leer datos
+    so2_sensor.write("\r")
+    utime.sleep_ms(200)
+
+    # Espera activa
+    while so2_sensor.any() == None:
+        continue
+
+    # Leer dato
+    received_data = so2_sensor.read()
+    
+    # Deepsleep (para reactivar hay que mandar cualquier caracter)
+    so2_sensor.write("s")
+    utime.sleep_ms(100)
+
+    # Procesar datos y return
+    decoded_data = ''.join(chr(b) if 32 <= b <= 126 or b in {10, 13} else '?' for b in received_data)
+    clean_data = extractNumbers(decoded_data)
+    clean_data = clean_data[1:] # elimino primer elemento
+
+    vals = [float(e) for e in clean_data]
+    if vals[0] < 0:
+        vals[0] = 0.00
+
+    # Temp (pos. 2) y Humedad (pos. 3) SON PORCENTAJES! LOS METO COMO INT PARA AHORRAR ESPACIO!
+    gas_values = (vals[1], vals[2])
+    # SO2 resultado (pos. ) (conversion del ADC) --> Float
+    gas_max_adc = 65535
+    gas_value = (vals[3]/gas_max_adc)*100
+
+    # Concatenando
+    values = gas_values + (gas_value,)
+    return values
+
 
 ###############
 # MODULO LORA #
 ###############
 
 def loadLora():
-
-    #spi = SPI(0, baudrate=1000000, polarity=0, phase=0, sck=Pin(18), mosi=Pin(19), miso=Pin(16))
     
-    # Iniciar módulo LoRa
+    # Iniciar módulo LoRa (SPI)
     sx = SX1262(clk=Pin(18), 
                 mosi=Pin(19), miso=Pin(16), 
                 cs=Pin(8), rst=Pin(9), irq=Pin(7),
@@ -166,7 +234,6 @@ def loadLora():
          crcOn=False, txIq=True, rxIq=False,
          tcxoVoltage=1.7, useRegulatorLDO=False, blocking=False)
 
-
     # Envio no bloqueante y asociación con funcion callback
     sx.setBlockingCallback(False, tx_callback)
     
@@ -178,38 +245,34 @@ def main():
     print("Modulo TX LoRa")
     print("--------------\n")
     
-    global start
+    global start, lora
 
     # Inicio modulo lora (TX)
     lora = loadLora()
     while (lora.getDeviceErrors() != 0): # 0 es que no hay errores
         lora = loadLora()
 
-    #lora.sleep()
-
     while 1:
         # Inicio de los sensores (faltan todavia)
         # airsensor, val1, val2 = loadAirquality()
         data_airsensor = (11.111, 11.222)
         data_no2 = loadNitrogenDioxide()
+        data_so2 = loadAzufreDioxide()
 
         # Timestamp del mensaje (variable global)
         start = utime.time() 
 
         # Concatenacion y procesado de las tuplas de valores
-        data = data_airsensor + data_no2
+        data = data_airsensor + data_no2 + data_so2
         payload_info = data + (start,)
         checksum = crc16(payload_info)
         payload_data = (checksum,) + payload_info
-        print(payload_data)
         payload = processPayload(payload_data)
         
         # Envio
-        #lora.standby()
         lora.send(payload) # duty cycle incorporado
-        #lora.sleep()
-        print("Message sent successfully")
-        print(payload)
+        print(lora.getStatus()) # activado, y cuando se produzca callback se pone en sleep
+        utime.sleep_us(100)
 
 if __name__ == "__main__":
     main()
