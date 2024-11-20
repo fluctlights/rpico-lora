@@ -7,6 +7,7 @@ from machine import I2C, Pin, UART
 
 PRESET = 0xFFFF
 POLYNOMIAL = 0xA001 # Modbus
+I2C_ADDRESS = 0x19 # Dirección modulo calidad del aire
 
 # Funcion callback para los envíos del módulo LoRa
 def tx_callback(events):
@@ -24,7 +25,7 @@ def crc16(data):
                 crc = (crc >> 1) ^ POLYNOMIAL
             else:
                 crc >>= 1
-                
+
     return crc ^ PRESET
 
 # Funcion para codificacion de bytes/hex en CBOR
@@ -83,19 +84,13 @@ def processPayload(payload):
 # SENSOR CALIDAD DEL AIRE #
 ###########################
 
-def loadAirquality():
-    # Inicio I2C
-    i2c = I2C(1, scl=Pin(27), sda=Pin(26), freq=100000)
-    I2C_ADDRESS = 0x19 # Direccion del sensor
-
-    # Inicio y recogida de datos del sensor de calidad del aire (PM2.5)
-    airquality = DFRobot_AirQualitySensor(i2c, I2C_ADDRESS)
-
-    version = sensor.gain_version()
+def readAirQuality(airquality):
+    airquality.awake()
+    version = airquality.gain_version()
     print("Firmware version is: " + str(version))
     num_particles_bigger_than_2_5_um_per_0_1_l = airquality.gain_particlenum_every0_1l(airquality.PARTICLENUM_2_5_UM_EVERY0_1L_AIR)
     concentration_pm2_5_in_ug_m3 = airquality.gain_particle_concentration_ugm3(airquality.PARTICLE_PM2_5_STANDARD)
-    return airquality, num_particles_bigger_than_2_5_um_per_0_1_l, concentration_pm2_5_in_ug_m3
+    return (num_particles_bigger_than_2_5_um_per_0_1_l, concentration_pm2_5_in_ug_m3)
 
 ############################
 # SENSOR DIOXIDO NITROGENO #
@@ -245,7 +240,20 @@ def main():
     print("Modulo TX LoRa")
     print("--------------\n")
     
-    global start, lora
+    global start, lora, airquality_sensor
+    airquality_sensor = DFRobot_AirQualitySensor()
+
+    utime.sleep_ms(3000)
+    airquality_sensor.awake()
+    utime.sleep_ms(3000)
+    version = airquality_sensor.gain_version()
+    print("Firmware version is: " + str(version))
+    utime.sleep_ms(3000)
+    num_particles_bigger_than_2_5_um_per_0_1_l = airquality_sensor.gain_particlenum_every0_1l(airquality_sensor.PARTICLENUM_2_5_UM_EVERY0_1L_AIR)
+    utime.sleep_ms(3000)
+    concentration_pm2_5_in_ug_m3 = airquality_sensor.gain_particle_concentration_ugm3(airquality_sensor.PARTICLE_PM2_5_STANDARD)
+
+    data_airquality = (num_particles_bigger_than_2_5_um_per_0_1_l, concentration_pm2_5_in_ug_m3)
 
     # Inicio modulo lora (TX)
     lora = loadLora()
@@ -254,8 +262,7 @@ def main():
 
     while 1:
         # Inicio de los sensores (faltan todavia)
-        # airsensor, val1, val2 = loadAirquality()
-        data_airsensor = (11.111, 11.222)
+        #data_airquality = readAirQuality(airquality=airquality_sensor)
         data_no2 = loadNitrogenDioxide()
         data_so2 = loadAzufreDioxide()
 
@@ -263,7 +270,7 @@ def main():
         start = utime.time() 
 
         # Concatenacion y procesado de las tuplas de valores
-        data = data_airsensor + data_no2 + data_so2
+        data = data_airquality + data_no2 + data_so2
         payload_info = data + (start,)
         checksum = crc16(payload_info)
         payload_data = (checksum,) + payload_info
@@ -271,7 +278,7 @@ def main():
         
         # Envio
         lora.send(payload) # duty cycle incorporado
-        print(lora.getStatus()) # activado, y cuando se produzca callback se pone en sleep
+        #print(lora.getStatus()) # activado, y cuando se produzca callback se pone en sleep
         utime.sleep_us(100)
 
 if __name__ == "__main__":
