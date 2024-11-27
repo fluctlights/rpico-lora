@@ -99,7 +99,7 @@ def readAirQuality(airquality):
 def loadNitrogenDioxide():
 
     # Inicio UART 0
-    no2_sensor = UART(0, baudrate=9600, tx=Pin(0), rx=Pin(1), bits=8, parity=None, stop=1)
+    no2_sensor = UART(0, baudrate=9600, tx=Pin(12), rx=Pin(13), bits=8, parity=None, stop=1)
 
     # Activando sensor
     no2_sensor.write("r")
@@ -244,8 +244,8 @@ def main():
     airquality_sensor = DFRobot_AirQualitySensor()
 
     utime.sleep_ms(3000)
-    airquality_sensor.awake()
-    utime.sleep_ms(3000)
+    #airquality_sensor.awake()
+    #utime.sleep_ms(3000)
     version = airquality_sensor.gain_version()
     print("Firmware version is: " + str(version))
     utime.sleep_ms(3000)
@@ -262,7 +262,8 @@ def main():
 
     while 1:
         # Inicio de los sensores (faltan todavia)
-        #data_airquality = readAirQuality(airquality=airquality_sensor)
+        data_airquality = (11.11, 22.22)
+        data_airquality = readAirQuality(airquality=airquality_sensor)
         data_no2 = loadNitrogenDioxide()
         data_so2 = loadAzufreDioxide()
 
