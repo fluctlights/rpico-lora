@@ -3,7 +3,7 @@ from sx1262 import SX1262
 from dfrobot_airqualitysensor import *
 import utime
 import struct
-from machine import I2C, Pin, UART
+from machine import Pin, UART
 
 PRESET = 0xFFFF
 POLYNOMIAL = 0xA001 # Modbus
@@ -84,12 +84,16 @@ def processPayload(payload):
 # SENSOR CALIDAD DEL AIRE #
 ###########################
 
-def readAirQuality(airquality):
-    airquality.awake()
-    version = airquality.gain_version()
-    print("Firmware version is: " + str(version))
-    num_particles_bigger_than_2_5_um_per_0_1_l = airquality.gain_particlenum_every0_1l(airquality.PARTICLENUM_2_5_UM_EVERY0_1L_AIR)
-    concentration_pm2_5_in_ug_m3 = airquality.gain_particle_concentration_ugm3(airquality.PARTICLE_PM2_5_STANDARD)
+
+def readAirQuality():
+    airquality_sensor.awake()
+    utime.sleep(5)
+    num_particles_bigger_than_2_5_um_per_0_1_l = airquality_sensor.gain_particlenum_every0_1l(airquality_sensor.PARTICLENUM_2_5_UM_EVERY0_1L_AIR)
+    print(num_particles_bigger_than_2_5_um_per_0_1_l)
+    concentration_pm2_5_in_ug_m3 = airquality_sensor.gain_particle_concentration_ugm3(airquality_sensor.PARTICLE_PM2_5_STANDARD)
+    print(concentration_pm2_5_in_ug_m3)
+    airquality_sensor.set_lowpower()
+    utime.sleep(5)
     return (num_particles_bigger_than_2_5_um_per_0_1_l, concentration_pm2_5_in_ug_m3)
 
 ############################
@@ -241,19 +245,11 @@ def main():
     print("--------------\n")
     
     global start, lora, airquality_sensor
+    
     airquality_sensor = DFRobot_AirQualitySensor()
-
-    utime.sleep_ms(3000)
     #airquality_sensor.awake()
-    #utime.sleep_ms(3000)
     version = airquality_sensor.gain_version()
     print("Firmware version is: " + str(version))
-    utime.sleep_ms(3000)
-    num_particles_bigger_than_2_5_um_per_0_1_l = airquality_sensor.gain_particlenum_every0_1l(airquality_sensor.PARTICLENUM_2_5_UM_EVERY0_1L_AIR)
-    utime.sleep_ms(3000)
-    concentration_pm2_5_in_ug_m3 = airquality_sensor.gain_particle_concentration_ugm3(airquality_sensor.PARTICLE_PM2_5_STANDARD)
-
-    data_airquality = (num_particles_bigger_than_2_5_um_per_0_1_l, concentration_pm2_5_in_ug_m3)
 
     # Inicio modulo lora (TX)
     lora = loadLora()
@@ -262,8 +258,8 @@ def main():
 
     while 1:
         # Inicio de los sensores (faltan todavia)
+        data_airquality = readAirQuality()
         data_airquality = (11.11, 22.22)
-        data_airquality = readAirQuality(airquality=airquality_sensor)
         data_no2 = loadNitrogenDioxide()
         data_so2 = loadAzufreDioxide()
 

@@ -18,7 +18,6 @@ class DFRobot_AirQualitySensor:
     PARTICLENUM_GAIN_VERSION = 0x1D
 
     def test(self):
-        #utime.sleep(10)
         print("Scanning I2C bus...")
 
         devices = self.i2c.scan()
@@ -39,12 +38,14 @@ class DFRobot_AirQualitySensor:
     def gain_particle_concentration_ugm3(self, PMtype):
         """Get PM concentration of a specified type."""
         buf = self.read_reg(PMtype, 2)
+        print(buf)
         concentration = (buf[0] << 8) + buf[1]
         return concentration
 
     def gain_particlenum_every0_1l(self, PMtype):
         """Get the number of PM in 0.1L of air."""
         buf = self.read_reg(PMtype, 2)
+        print(buf)
         particlenum = (buf[0] << 8) + buf[1]
         return particlenum
 
@@ -64,7 +65,7 @@ class DFRobot_AirQualitySensor:
     def write_reg(self, reg, data):
         """Write data to a register."""
         try:
-            self.i2c.writeto_mem(self.__addr, reg, bytes(data))
+            self.i2c.writeto_mem(self.__addr, reg, bytearray(data))
         except OSError as e:
             print("Write error:", e)
 
@@ -75,18 +76,3 @@ class DFRobot_AirQualitySensor:
         except OSError as e:
             print("Read error:", e)
             return bytearray([0] * length)
-
-airquality_sensor = DFRobot_AirQualitySensor()
-utime.sleep_ms(3000)
-airquality_sensor.awake()
-utime.sleep_ms(3000)
-version = airquality_sensor.gain_version()
-print("Firmware version is: " + str(version))
-utime.sleep_ms(3000)
-
-while 1:
-    num_particles_bigger_than_2_5_um_per_0_1_l = airquality_sensor.gain_particlenum_every0_1l(airquality_sensor.PARTICLENUM_2_5_UM_EVERY0_1L_AIR)
-    #utime.sleep_ms(3000)
-    concentration_pm2_5_in_ug_m3 = airquality_sensor.gain_particle_concentration_ugm3(airquality_sensor.PARTICLE_PM2_5_STANDARD)
-    print(concentration_pm2_5_in_ug_m3)
-    utime.sleep(2)
