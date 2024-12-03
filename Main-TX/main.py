@@ -86,13 +86,13 @@ def processPayload(payload):
 
 
 def readAirQuality():
-    airquality_sensor.awake()
+    #airquality_sensor.awake()
     utime.sleep(5)
     num_particles_bigger_than_2_5_um_per_0_1_l = airquality_sensor.gain_particlenum_every0_1l(airquality_sensor.PARTICLENUM_2_5_UM_EVERY0_1L_AIR)
     print(num_particles_bigger_than_2_5_um_per_0_1_l)
     concentration_pm2_5_in_ug_m3 = airquality_sensor.gain_particle_concentration_ugm3(airquality_sensor.PARTICLE_PM2_5_STANDARD)
     print(concentration_pm2_5_in_ug_m3)
-    airquality_sensor.set_lowpower()
+    #airquality_sensor.set_lowpower()
     utime.sleep(5)
     return (num_particles_bigger_than_2_5_um_per_0_1_l, concentration_pm2_5_in_ug_m3)
 

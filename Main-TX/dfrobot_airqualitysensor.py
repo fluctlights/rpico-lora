@@ -30,7 +30,7 @@ class DFRobot_AirQualitySensor:
             print("No I2C devices found.")
 
     def __init__(self):
-        self.i2c = I2C(0, scl=Pin(1), sda=Pin(0), freq=400000)  # Pin 2 (SDA), Pin 3 (SCL), 100kHz
+        self.i2c = I2C(0, scl=Pin(1), sda=Pin(0), freq=100000)  # Pin 2 (SDA), Pin 3 (SCL), 100kHz
         self.__addr = 0x19
 
         self.test()
