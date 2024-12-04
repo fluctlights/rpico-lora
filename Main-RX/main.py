@@ -22,9 +22,15 @@ def rx_callback(events):
 def processData(lora_msg):
 
     bytes_payload = splitIntoChunks(lora_msg[0], 5)
+
     crc = cbor_decode_integer(bytes_payload[0])
     data_airsensor1 = cbor_decode_float_single(bytes_payload[1])
     data_airsensor2 = cbor_decode_float_single(bytes_payload[2])
+
+    # PRUEBAS, NO FUNCIONA SIEMPRE POR DESGRACIA
+    # data_airsensor1 = cbor_decode_integer(bytes_payload[1])
+    # data_airsensor2 = cbor_decode_integer(bytes_payload[2])
+
     data_no2_1 = cbor_decode_float_single(bytes_payload[3])
     data_no2_2 = cbor_decode_float_single(bytes_payload[4])
     data_no2_3 = cbor_decode_float_single(bytes_payload[5])
