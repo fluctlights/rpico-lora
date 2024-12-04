@@ -8,6 +8,10 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "hardware/i2c.h"
+#include "pico/stdlib.h"
+
+
+
 
 // Open this macro to see the program running in detail
 //#define ENABLE_DBG
@@ -40,27 +44,32 @@
 #define PARTICLENUM_5_0_UM_EVERY0_1L_AIR 0X19
 #define PARTICLENUM_10_UM_EVERY0_1L_AIR  0X1B
 
-#define PARTICLENUM_GAIN_VERSION 0X1D
+#define SENSOR_STATE 0X01
+#define SENSOR_VERSION 0X1D
 
 class DFRobot_AirQualitySensor {
 public:
-    DFRobot_AirQualitySensor(i2c_inst_t *i2c, uint8_t addr = 0x19);
-    ~DFRobot_AirQualitySensor() {}
+    DFRobot_AirQualitySensor(uint8_t i2c_addr, uint8_t i2c_sda, uint8_t i2c_scl, i2c_inst_t* i2c_port);
+    ~DFRobot_AirQualitySensor(void){};
 
-    bool begin();
-    uint16_t gainParticleConcentration_ugm3(uint8_t type);
+    uint16_t gainParticleConcentration_mgm3(uint8_t type);
     uint16_t gainParticleNum_Every0_1L(uint8_t type);
-    uint8_t gainVersion();
-    void setLowpower();
+    uint8_t get_version();
+    void lowpower();
     void awake();
 
 protected:
-    void writeReg(uint8_t reg, const void *data, uint8_t len);
-    int16_t readReg(uint8_t reg, uint8_t *data, uint8_t len);
+    void write_register(uint8_t reg, const uint8_t *data, uint8_t len);
+    int16_t read_register(uint8_t reg, uint8_t *data, uint8_t len);
 
 private:
-    i2c_inst_t *_i2c;
     uint8_t _i2c_addr;
+    uint8_t _i2c_sda;
+    uint8_t _i2c_scl;
+    i2c_inst_t _i2c_port;
+    void init_i2c();
+    void look_for_addr();
+    bool reserved_addr(uint8_t addr);
 };
 
 #endif
