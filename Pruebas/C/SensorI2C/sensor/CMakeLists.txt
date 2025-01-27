@@ -16,7 +16,7 @@ else()
     set(USERHOME $ENV{HOME})
 endif()
 set(sdkVersion 2.1.0)
-set(toolchainVersion RISCV_RPI_2_0_0_5)
+set(toolchainVersion 13_3_Rel1)
 set(picotoolVersion 2.1.0)
 set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
 if (EXISTS ${picoVscode})
@@ -55,6 +55,7 @@ target_include_directories(sensor PRIVATE
 
 # Add any user requested libraries
 target_link_libraries(sensor 
+        hardware_spi
         hardware_i2c
         )
 
