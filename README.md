@@ -31,7 +31,7 @@ ADC_H (RELATIVE HUMIDITY):  27910
 
 Actualmente, los sensores están conectados de la siguiente forma a la placa de desarrollo:
 
-![](https://raw.githubusercontent.com/fluctlights/rpico-lora/main/Assets/esquema_sensores_uart.jpg)
+![](https://github.com/fluctlights/rpico-lora/blob/main/Assets/esquema_sensores_uart.jpg)
 
 
 **Lista To-Do:**
