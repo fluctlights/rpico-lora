@@ -2,9 +2,21 @@
 #include <string.h>
 #include <stdlib.h>
 #include "pico/stdlib.h"
-#include "hardware/i2c.h"
+#include "pico/binary_info.h"
+#include "pico/multicore.h"
+#include "hardware/clocks.h"
+#include "hardware/timer.h"
+
 #include "hardware/uart.h"
+
+#include "hardware/i2c.h"
 #include "DFRobot_AirQualitySensor.hpp"
+
+#include "hardware/spi.h"
+#include "radiolib/RadioLib.h"
+#include "radiolib/hal/RPiPico/PicoHal.h"
+#include "radiolib/Module.h"
+
 
 #define BUFFER_SIZE 60
 
@@ -128,25 +140,26 @@ void print_info(char *data)
     printf("ADC_H (RELATIVE HUMIDITY): %s\n", token);
 }
 
-int main()
+void make_pm2_5_reading()
 {
-    stdio_init_all();
+    DFRobot_AirQualitySensor *sensor = new DFRobot_AirQualitySensor(I2C_SENSOR_ADDR, I2C_SDA, I2C_SCL, I2C_PORT);
+    uint8_t vers = sensor->get_version();
+    printf("Version is: %d\n", vers);
 
-    //DFRobot_AirQualitySensor *sensor = new DFRobot_AirQualitySensor(I2C_SENSOR_ADDR, I2C_SDA, I2C_SCL, I2C_PORT);
+    uint16_t particle_num = sensor->gainParticleNum_Every0_1L(PARTICLENUM_0_3_UM_EVERY0_1L_AIR);
+    printf("The number of particles with a diameter of 0.3um per 0.1 in lift-off is: %d\n", particle_num);
+    uint16_t particle_concentration = sensor->gainParticleConcentration_mgm3(PARTICLE_PM1_0_STANDARD);
+    printf("PM1.0 concentration is: %d mg/m3\n", particle_concentration);
+    sleep_ms(1000);  // Wait 1 second between readings
+}
 
+void make_uart_readings()
+{
     uart_init(UART_PORT_1, BAUD_RATE);
     uart_init(UART_PORT_0, BAUD_RATE);
 
-    while(1) 
+    for (int i=0; i<10; i++)
     {
-        // uint8_t vers = sensor->get_version();
-        // printf("Version is: %d\n", vers);
-
-        // uint16_t particle_num = sensor->gainParticleNum_Every0_1L(PARTICLENUM_0_3_UM_EVERY0_1L_AIR);
-        // printf("The number of particles with a diameter of 0.3um per 0.1 in lift-off is: %d\n", particle_num);
-        // uint16_t particle_concentration = sensor->gainParticleConcentration_mgm3(PARTICLE_PM1_0_STANDARD);
-        // printf("PM1.0 concentration is: %d mg/m3\n", particle_concentration);
-        // sleep_ms(1000);  // Wait 1 second between readings
 
         sleep_ms(500);
         configure_uart(UART_PORT_1, uart1_devices_txpins[0], uart1_devices_rxpins[0]);
@@ -243,6 +256,54 @@ int main()
         uart_init(UART_PORT_0, BAUD_RATE);
         sleep_ms(1000);
     }
+
+}
+
+void use_lora_module()
+{
+    // SX1262 has the following connections:
+    // NSS pin:   10
+    // DIO1 pin:  2
+    // NRST pin:  3
+    // BUSY pin:  9
+
+    // sx = SX1262(clk=Pin(18), 
+    //              mosi=Pin(19), miso=Pin(16), 
+    //              cs=Pin(8), rst=Pin(9), irq=Pin(7),
+    //              gpio=Pin(15)
+    // )
+
+    // sx.begin(freq=868.3, bw=125, sf=10, cr=6, syncWord=0x12,
+    //         power=-5, currentLimit=60.0, preambleLength=8,
+    //         implicit=False, implicitLen=0xFF,
+    //         crcOn=False, txIq=False, rxIq=True,
+    //         tcxoVoltage=1.7, useRegulatorLDO=False, blocking=False
+    // )
+
+    // Initialize GPIO pins
+    spi_init(spi_default, 1000 * 1000);
+    gpio_set_function(PICO_DEFAULT_SPI_RX_PIN, GPIO_FUNC_SPI);
+    gpio_set_function(PICO_DEFAULT_SPI_SCK_PIN, GPIO_FUNC_SPI);
+    gpio_set_function(PICO_DEFAULT_SPI_TX_PIN, GPIO_FUNC_SPI);
+    gpio_set_function(PICO_DEFAULT_SPI_CSN_PIN, GPIO_FUNC_SPI);
+
+    // Make the SPI pins available to picotool
+    //bi_decl(bi_4pins_with_func(PICO_DEFAULT_SPI_RX_PIN, PICO_DEFAULT_SPI_TX_PIN, PICO_DEFAULT_SPI_SCK_PIN, PICO_DEFAULT_SPI_CSN_PIN, GPIO_FUNC_SPI));
+
+    // Initialize HAL
+    PicoHal *pico2 = new PicoHal(spi_default, PICO_DEFAULT_SPI_RX_PIN, PICO_DEFAULT_SPI_TX_PIN, PICO_DEFAULT_SPI_SCK_PIN, 8000000);
+    Module *sx1262_module = new Module(pico2, PICO_DEFAULT_SPI_CSN_PIN, 7, 28, 15);
+
+}
+
+int main()
+{
+    stdio_init_all();
+
+    make_pm2_5_reading();
+    make_uart_readings();
+    use_lora_module();
+
     
     return 0;
 }
